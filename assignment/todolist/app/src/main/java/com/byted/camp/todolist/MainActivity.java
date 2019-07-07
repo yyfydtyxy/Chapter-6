@@ -2,6 +2,8 @@ package com.byted.camp.todolist;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
 import android.support.design.widget.FloatingActionButton;
@@ -15,9 +17,15 @@ import android.view.MenuItem;
 import android.view.View;
 
 import com.byted.camp.todolist.beans.Note;
+import com.byted.camp.todolist.beans.State;
+import com.byted.camp.todolist.db.TodoContract;
+import com.byted.camp.todolist.db.TodoDbHelper;
 import com.byted.camp.todolist.debug.DebugActivity;
 import com.byted.camp.todolist.ui.NoteListAdapter;
 
+import java.util.Collections;
+import java.util.Date;
+import java.util.LinkedList;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
@@ -103,11 +111,56 @@ public class MainActivity extends AppCompatActivity {
 
     private List<Note> loadNotesFromDatabase() {
         // TODO 从数据库中查询数据，并转换成 JavaBeans
-        return null;
+        TodoDbHelper mDbHelper = new TodoDbHelper(this);
+        SQLiteDatabase db = mDbHelper.getReadableDatabase();
+        if(db == null){
+            return Collections.emptyList();
+        }
+        List<Note> result = new LinkedList<>();
+        Cursor cursor = null;
+        try{
+            cursor = db.query(TodoContract.Todolist.TABLE_NAME, new String[]{
+                    TodoContract.Todolist.COLUNUM_LIST, TodoContract.Todolist.COLUNUM_DATE
+                    , TodoContract.Todolist.COLUNUM_STATE
+            }, null, null, null, null, TodoContract.Todolist.COLUNUM_DATE + " DESC");
+
+            while(cursor.moveToNext()){
+                long i = 0;
+                String content = cursor.getString(cursor.getColumnIndex(TodoContract.Todolist.COLUNUM_LIST));
+                long datems = cursor.getLong(cursor.getColumnIndex(TodoContract.Todolist.COLUNUM_DATE));
+                int mstate = cursor.getInt(cursor.getColumnIndex(TodoContract.Todolist.COLUNUM_STATE));
+
+                Date date = new Date(datems * 1000);
+
+
+                Note note = new Note(i);
+
+                note.setContent(content);
+                note.setDate(date);
+                note.setState(State.from(mstate));
+
+                result.add(note);
+
+                i++;
+            }
+
+        }finally {
+            if(cursor != null)
+                cursor.close();
+        }
+        return result;
     }
 
     private void deleteNote(Note note) {
         // TODO 删除数据
+        TodoDbHelper mDbHelper = new TodoDbHelper(this);
+        SQLiteDatabase db = mDbHelper.getReadableDatabase();
+        String selection = TodoContract.Todolist.COLUNUM_LIST + " LIKE ?";
+        String[] selectionArgs = new String[1];
+        selectionArgs[0] = note.getContent();
+
+        int deletedRows = db.delete(TodoContract.Todolist.TABLE_NAME, selection, selectionArgs);
+        notesAdapter.refresh(loadNotesFromDatabase());
     }
 
     private void updateNode(Note note) {
